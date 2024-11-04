@@ -35,23 +35,77 @@ class Notion {
   }
 }
 
-function doPost(e) {
+function doGet(e) {
+  sendToNotion();
+  return ContentService.createTextOutput("実行完了しました。");
+}
+
+function sendToNotion() {
   const props = PropertiesService.getScriptProperties();
   const notion = new Notion(props.getProperty("NOTION_TOKEN"));
 
-  const contents = e.postData.contents;
-  const data = parseJson(contents);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // IFTTTから転送されたデータが保存されるシート
+  const newTaskSheet = ss.getSheetByName('new_tasks');
 
-  if (data.authToken !== props.getProperty("AUTH_TOKEN")) {
-    Logger.log("Authentication failed!");
-    return;
+  // 送信完了したタスクを保存するシート
+  // スプレッドシートの上限に引っかかるので転送しないほうがいいかも？
+  const transferredSheet = ss.getSheetByName('transferred');
+
+  // シートからタスクを取得する
+  const newTasks = getNewTasks(newTaskSheet);
+  if (newTasks === null) { // タスクがなかったら終了
+    return null;
   }
 
-  const pageObj = generatePageObj(data, props.getProperty("DATABASE_ID"));
-  const res = notion.createPage(pageObj);
+  // 1行ずつFormatして送信する
+  for (const row of newTasks) {
+    const data = rowToJson(row);
+    const pageObj = generatePageObj(data, props.getProperty("DATABASE_ID"));
+    const res = notion.createPage(pageObj);
 
-  if (res["object"] === "error") {
-    sendErrorMail(props.getProperty("MAIL_ADDRESS"), data, res);
+    // 送信済みシートに移動する
+    transferredSheet.appendRow(row);
+
+    if (res["object"] === "error") {
+      sendErrorMail(props.getProperty("MAIL_ADDRESS"), data, res);
+    }
+  }
+
+  // 送信完了したらタスクシートを削除する
+  clearSheetButKeepHeaders(newTaskSheet);
+}
+
+function getNewTasks(sheet) {
+  const COLUMN_LENGTH = 10;
+  const START_ROW = 2;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 1) { // タスクがない場合
+    return null;
+  }
+
+  const values = sheet.getRange(START_ROW, 1, lastRow - 1, COLUMN_LENGTH).getValues();
+  return values;
+}
+
+function clearSheetButKeepHeaders(sheet) {
+  const range = sheet.getRange(2, 1, sheet.getMaxRows() - 1, sheet.getMaxColumns()); range.clearContent();
+  range.clearContent();
+}
+
+function rowToJson(row) {
+  return {
+    TaskName: row[0],
+    TaskContent: row[1],
+    CompleteDate: row[2],
+    StartDate: row[3],
+    EndDate: row[4],
+    List: row[5],
+    Priority: row[6],
+    Tag: row[7],
+    LinkToTask: row[8],
+    CreatedAt: row[9],
   }
 }
 
@@ -69,22 +123,6 @@ function sendErrorMail(address, data, res) {
   ].join("\n");
   const options = { name: "TickTick to Notion" };
   GmailApp.sendEmail(recipient, subject, body, options);
-}
-
-function parseJson(jsonString) {
-  const pattern = /\"TaskContent\": \"(.*?[\r\n]*?)*?\"/;
-  const taskContent = jsonString.match(pattern)[0];
-  const fmtTaskContent = convertNewlineChar(taskContent);
-  const fmtJsonString = jsonString.replace(pattern, fmtTaskContent);
-  const ret = JSON.parse(fmtJsonString);
-  return ret;
-}
-
-function convertNewlineChar(str) {
-  return str
-    .replace(/(\r\n)/g, "\n")
-    .replace(/(\r)/g, "\n")
-    .replace(/(\n)/g, "\\n");
 }
 
 function generatePageObj(data, databaseId) {

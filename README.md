@@ -1,4 +1,45 @@
-﻿# Recording tasks from TickTick to Notion
+﻿# Readme
+
+IFTTTのWebhookがFreePlanだと利用できなくなっていた。  
+そのため、TickTick→IFTTT→Google Spreadsheet→GAS→Notionで対応。  
+
+## IFTTT
+
+### トリガーの設定
+
+TickTick の「New completed task」をトリガーに設定する。
+アカウントを連携して、以下を設定する。
+
+| Item     | Value         |
+| -------- | ------------- |
+| List     | All Lists     |
+| Tag      | All Tags      |
+| Priority | Please Select |
+
+### アクションの設定
+
+Google Spreadsheet の「Add row to spreadsheet」をアクションに設定する。
+
+Formatted rowを以下のように設定する。  
+※この順番でスプレッドシートのカラムが作成されるので順番が変わると正しく動作しない。
+
+```{{TaskName}} ||| {{TaskContent}} ||| {{CompleteDate}} ||| {{StartDate}} ||| {{EndDate}} ||| {{List}} ||| {{Priority}} ||| {{Tag}} ||| {{LinkToTask}} ||| {{CreatedAt}}```
+
+## GAS
+1. 仮でTickTickからタスクを完了させて、IFTTTにスプレッドシートを作成してもらう
+1. IFTTTが作成したスプレッドシートにclaspでpush
+1. GASでスクリプトプロパティを設定。※keigoh4315さんのReadme参照
+1. GASでトリガーを設定※変更のトリガーだと誤動作対策が難しいので、時間トリガーを設定する
+1. 任意：Webアプリとしてデプロイすれば任意のタイミングで取り込みを実行できる
+
+
+## 備考
+
+Notionに転送したデータはtransferredシートに残すようにしているが、件数が多くなってきた場合動作しない可能性があるので要検討
+
+# 以下keigoh4315さんのReadme
+
+# Recording tasks from TickTick to Notion
 
 [![clasp](https://img.shields.io/badge/built%20with-clasp-4285f4.svg)](https://github.com/google/clasp)
 
